@@ -4,7 +4,7 @@ from PIL import Image, ImageFont
 
 from engine import W, H, is_wide
 
-CW, CH = 8, 16                      # pixel size of one character cell
+CW, CH = 8, 16                      # 默认字符单元像素尺寸（8x16 -> 1280x720）
 BG = (4, 8, 10)
 
 MONO_FONTS = [
@@ -30,11 +30,16 @@ def _load(paths, size):
 
 
 class GlyphAtlas:
-    """Pre-rendered glyph masks so frames can be composited quickly."""
+    """Pre-rendered glyph masks so frames can be composited quickly.
 
-    def __init__(self):
-        self.mono = _load(MONO_FONTS, 14)
-        self.cjk = _load(CJK_FONTS, 15)
+    cw/ch set the pixel size of one character cell: 8x16 -> 1280x720,
+    16x32 -> 2560x1440 (2K), 24x48 -> 3840x2160 (4K).
+    """
+
+    def __init__(self, cw=CW, ch=CH):
+        self.cw, self.ch = cw, ch
+        self.mono = _load(MONO_FONTS, int(ch * 0.875))
+        self.cjk = _load(CJK_FONTS, int(ch * 0.9375))
         self.cache = {}
 
     def mask(self, ch):
@@ -43,28 +48,29 @@ class GlyphAtlas:
             return m
         wide = is_wide(ch)
         font = self.cjk if wide else self.mono
-        cw = CW * (2 if wide else 1)
+        cw = self.cw * (2 if wide else 1)
+        chh = self.ch
         try:
             gm = font.getmask(ch, mode="L")
             gw, gh = gm.size
             arr = np.array(gm, dtype=np.float32).reshape(gh, gw) / 255.0
         except Exception:
-            arr = np.zeros((CH, cw), dtype=np.float32)
-        out = np.zeros((CH, cw), dtype=np.float32)
-        oy = max(0, (CH - arr.shape[0]) // 2 + 1)
+            arr = np.zeros((chh, cw), dtype=np.float32)
+        out = np.zeros((chh, cw), dtype=np.float32)
+        oy = max(0, (chh - arr.shape[0]) // 2 + 1)
         ox = max(0, (cw - arr.shape[1]) // 2)
-        h = min(CH - oy, arr.shape[0])
+        h = min(chh - oy, arr.shape[0])
         w = min(cw - ox, arr.shape[1])
         out[oy:oy + h, ox:ox + w] = arr[:h, :w]
         self.cache[ch] = out
         return out
 
     def render(self, cv):
-        """cv: engine.Canvas -> HxWx3 uint8 numpy image."""
-        img = np.zeros((H * CH, W * CW, 3), dtype=np.float32)
+        """cv: engine.Canvas -> (H*ch)x(W*cw)x3 uint8 numpy image."""
+        cw, chh = self.cw, self.ch
+        img = np.zeros((H * chh, W * cw, 3), dtype=np.float32)
         img[:, :] = BG
         ch_arr, fg_arr = cv.ch, cv.fg
-        x = 0
         for y in range(H):
             base = y * W
             x = 0
@@ -77,13 +83,13 @@ class GlyphAtlas:
                     mh, mw = m.shape
                     col = np.array([(fg >> 16) & 255, (fg >> 8) & 255, fg & 255],
                                    dtype=np.float32)
-                    y0, x0 = y * CH, x * CW
+                    y0, x0 = y * chh, x * cw
                     tile = img[y0:y0 + mh, x0:x0 + mw]
                     hh, ww = tile.shape[:2]
                     if ww != mw or hh != mh:          # 画面边缘裁剪
                         m = m[:hh, :ww]
                     tile[:] = tile * (1 - m[..., None]) + col * m[..., None]
-                    x += max(1, mw // CW)
+                    x += max(1, mw // cw)
                 else:
                     x += 1
         return np.clip(img, 0, 255).astype(np.uint8)
@@ -92,11 +98,11 @@ class GlyphAtlas:
         return Image.fromarray(self.render(cv), "RGB")
 
 
-_ATLAS = None
+_ATLAS = {}
 
 
-def atlas():
-    global _ATLAS
-    if _ATLAS is None:
-        _ATLAS = GlyphAtlas()
-    return _ATLAS
+def atlas(cw=CW, ch=CH):
+    key = (cw, ch)
+    if key not in _ATLAS:
+        _ATLAS[key] = GlyphAtlas(cw, ch)
+    return _ATLAS[key]

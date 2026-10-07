@@ -56,10 +56,12 @@ python play.py --offset -0.15    # 音画同步微调（秒）
 ## 导出 MP4
 
 ```sh
-python export_mp4.py --out RisingTide_ColdWar_ASCII_MV.mp4
+python export_mp4.py --out RisingTide_ColdWar_ASCII_MV.mp4                      # 1280x720 @30
+python export_mp4.py --out mv-2k60.mp4 --size 2560x1440 --fps 60 --preset slow # 2K @60（发布用）
 ```
 
-输出 1280×720 / 30fps / H.264 + AAC，视频轨与终端画面逐帧一致。
+输出 H.264 + AAC，视频轨与终端画面逐帧一致。分辨率只要是 16:9 且能整除
+160×45 字符网格即可（1280×720 → 单元格 8×16，2560×1440 → 16×32，3840×2160 → 24×48）。
 需要 `ffmpeg` 在 PATH 中，以及 `numpy` + `Pillow`。
 
 ## 时间轴
