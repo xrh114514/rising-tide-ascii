@@ -1,0 +1,19 @@
+# 音乐与成片不入库（版权）：使用者自备音频
+media/
+*.flac
+*.mp3
+*.wav
+*.m4a
+*.ogg
+*.mp4
+
+# 中间产物
+__pycache__/
+*.pyc
+_*.tmp
+preview/
+*.out
+
+# 系统
+.DS_Store
+Thumbs.db
